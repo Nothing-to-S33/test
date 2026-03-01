@@ -1,4 +1,4 @@
-name: BugHunter-Wush
+name: BugHunter-LocalhostRun
 on: [push, workflow_dispatch]
 
 jobs:
@@ -13,27 +13,33 @@ jobs:
         sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
         sudo systemctl restart ssh
         
-    - name: Install Wush
+    - name: Start localhost.run Tunnel
       run: |
-        curl -fsSL https://github.com/coder/wush/raw/main/install.sh | sh
+        echo "======================================================"
+        echo "         🔥 BUG HUNTER SSH (localhost.run) 🔥"
+        echo "======================================================"
+        echo ""
         
-    - name: Start Wush Tunnel
-      run: |
-        echo "======================================================"
-        echo "         🔥 BUG HUNTER SSH (WUSH) 🔥"
-        echo "======================================================"
-        echo ""
-        echo "📡 Run this on YOUR local machine:"
-        echo ""
-        echo "1. Install wush: curl -fsSL https://github.com/coder/wush/raw/main/install.sh | sh"
-        echo "2. Connect: wush ssh"
-        echo "3. When prompted, paste this auth key:"
-        echo ""
-        # Generate and display auth key
-        wush serve :22 &
-        sleep 3
-        echo "======================================================"
-        echo "🔑 Password: toor123 (if asked)"
+        # Create SSH tunnel
+        ssh -o StrictHostKeyChecking=no -R 80:localhost:22 ssh.localhost.run > tunnel.log 2>&1 &
+        
+        sleep 10
+        
+        # Extract URL
+        URL=$(grep -o 'https://[a-zA-Z0-9.-]*\.lhr\.life' tunnel.log | head -1)
+        
+        if [ ! -z "$URL" ]; then
+          echo "✅ Tunnel URL: $URL"
+          echo ""
+          echo "📡 SSH Command:"
+          echo "ssh -p 22 root@$(echo $URL | cut -d/ -f3) -o StrictHostKeyChecking=no"
+          echo ""
+          echo "🔑 Password: toor123"
+        else
+          echo "⚠️  Tunnel logs:"
+          cat tunnel.log
+        fi
+        
         echo "======================================================"
         
         while true; do sleep 300; done
