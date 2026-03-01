@@ -15,15 +15,14 @@ jobs:
         sudo systemctl restart ssh
         echo "✅ SSH configured with password: toor123"
         
-    - name: Install Wush (Correct Link)
+    - name: Install Wush
       run: |
-        # Download the correct file with underscore format
         wget -O wush.tar.gz https://github.com/coder/wush/releases/download/v0.4.1/wush_0.4.1_linux_amd64.tar.gz
         tar -xzf wush.tar.gz
         chmod +x wush
         sudo mv wush /usr/local/bin/
         rm wush.tar.gz
-        echo "✅ Wush v0.4.1 installed successfully"
+        echo "✅ Wush v0.4.1 installed"
         
     - name: Start Wush Tunnel
       run: |
@@ -32,18 +31,31 @@ jobs:
         echo "======================================================"
         echo ""
         
-        # Start wush in background
-        wush serve :22 > wush.log 2>&1 &
+        # Start wush and capture output to get auth key
+        echo "⏳ Starting wush server and generating auth key..."
+        echo ""
+        
+        # Run wush serve and capture output in real-time
+        wush serve :22 2>&1 | tee wush_output.log &
         WUSH_PID=$!
         
-        echo "⏳ Generating authentication key..."
-        sleep 8
+        # Wait for auth key to appear
+        echo "⏳ Waiting for authentication key..."
+        sleep 5
         
-        # Get the auth key
-        echo "📡 WUSH AUTHENTICATION KEY:"
-        echo ""
+        # Try to extract auth key from log
+        AUTH_KEY=$(grep -o '[a-zA-Z0-9]\{50,\}' wush_output.log 2>/dev/null | head -1)
+        
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        wush auth show
+        if [ ! -z "$AUTH_KEY" ]; then
+          echo "🔑 YOUR AUTHENTICATION KEY:"
+          echo "$AUTH_KEY"
+        else
+          echo "📡 WUSH SERVER RUNNING - AUTH KEY WILL APPEAR BELOW:"
+          echo ""
+          # Show the last few lines of output which should contain the key
+          tail -n 10 wush_output.log
+        fi
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         
         echo ""
@@ -53,18 +65,33 @@ jobs:
         echo ""
         echo "📝 INSTRUCTIONS FOR WINDOWS:"
         echo "──────────────────────────────────────"
-        echo "1. On Windows, download: curl -LO https://github.com/coder/wush/releases/download/v0.4.1/wush_0.4.1_windows_amd64.exe"
-        echo "2. Rename to wush.exe"
-        echo "3. Run: .\wush.exe ssh"
-        echo "4. Paste the AUTHENTICATION KEY above"
-        echo "5. When prompted for password, enter: toor123"
+        echo "1. Download wush for Windows:"
+        echo "   curl -LO https://github.com/coder/wush/releases/download/v0.4.1/wush_0.4.1_windows_amd64.exe"
+        echo "   ren wush_0.4.1_windows_amd64.exe wush.exe"
+        echo ""
+        echo "2. Connect using the auth key above:"
+        echo "   .\wush.exe ssh"
+        echo ""
+        echo "3. When prompted for password, enter: toor123"
         echo "──────────────────────────────────────"
         
-        # Show auth key every 5 minutes for easy copy
-        COUNTER=0
+        # Monitor and display auth key when it appears
+        echo ""
+        echo "📡 Monitoring for auth key (will update when found):"
+        
         while true; do
-          sleep 300
-          COUNTER=$((COUNTER + 5))
-          echo "[$(date '+%H:%M:%S')] Session active for $COUNTER minutes"
-          echo "🔑 Auth key still: $(wush auth show 2>/dev/null | head -1)"
+          sleep 10
+          # Check if we have the key, if not try to extract again
+          if [ -z "$AUTH_KEY" ]; then
+            NEW_KEY=$(grep -o '[a-zA-Z0-9]\{50,\}' wush_output.log 2>/dev/null | head -1)
+            if [ ! -z "$NEW_KEY" ]; then
+              AUTH_KEY=$NEW_KEY
+              echo ""
+              echo "✅ AUTH KEY FOUND: $AUTH_KEY"
+              echo ""
+            fi
+          fi
+          
+          # Show running message
+          echo "[$(date '+%H:%M:%S')] Session active - Auth key: ${AUTH_KEY:-waiting...}"
         done
