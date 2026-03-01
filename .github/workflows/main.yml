@@ -1,4 +1,4 @@
-name: BugHunter-Cloudflare
+name: BugHunter-SSH
 on: [push, workflow_dispatch]
 
 jobs:
@@ -7,11 +7,9 @@ jobs:
     timeout-minutes: 360
 
     steps:
-    - name: Install Cloudflared & SSH
+    - name: Install SSH & Dependencies
       run: |
-        sudo apt update && sudo apt install -y wget openssh-server
-        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-        sudo dpkg -i cloudflared-linux-amd64.deb
+        sudo apt update && sudo apt install -y openssh-server sshpass
         
     - name: Configure Root Access
       run: |
@@ -20,59 +18,39 @@ jobs:
         sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
         sudo systemctl restart ssh
         
-    - name: Start Cloudflare Tunnel
+    - name: Start Pinggy Tunnel
       run: |
-        # Start tunnel in background
-        cloudflared tunnel --url ssh://localhost:22 > cf.log 2>&1 &
-        
-        echo "⏳ Waiting for tunnel to establish (this takes 15-20 seconds)..."
-        sleep 20
-        
-        # Get the URL
-        URL=$(grep -o 'https://[-a-zA-Z0-9.]*\.trycloudflare\.com' cf.log | head -n 1)
-        
-        echo "══════════════════════════════════════════════════"
+        echo "======================================================"
         echo "         🔥 BUG HUNTER SSH ACCESS 🔥"
-        echo "══════════════════════════════════════════════════"
+        echo "======================================================"
         echo ""
+        echo "📡 Starting Pinggy tunnel (better than Cloudflare for GH Actions)..."
+        echo ""
+        
+        # Install sshpass and start tunnel
+        ssh -o StrictHostKeyChecking=no -p 443 -R0:localhost:22 -o ServerAliveInterval=30 qr@a.pinggy.io > pinggy.log 2>&1 &
+        
+        sleep 5
+        
+        # Get URL from log
+        URL=$(grep -o 'https://.*\.pinggy\.link' pinggy.log | head -1)
         
         if [ ! -z "$URL" ]; then
-          echo "  📡 SSH Command:"
-          echo "  ssh -o ProxyCommand=\"cloudflared access ssh --hostname $URL\" root@localhost"
+          echo "✅ Tunnel URL: $URL"
           echo ""
-          echo "  🔑 Password: toor123"
+          echo "📡 SSH Command:"
+          echo "ssh -p \$(echo $URL | cut -d: -f2 | cut -d/ -f3) root@localhost -o ProxyCommand=\"ssh -p 443 -W %h:%p qr@a.pinggy.io\""
           echo ""
-          echo "  ⏰ Session expires in: 6 hours"
+          echo "🔑 Password: toor123"
         else
-          echo "  ⚠️  URL not found in logs. Displaying last 20 lines:"
-          echo "  ---------------------------------------------"
-          tail -n 20 cf.log
-          echo ""
-          echo "  🔑 Password: toor123"
-          echo ""
-          echo "  💡 If you still don't see URL, try running manually after session starts:"
-          echo "     cat cf.log | grep trycloudflare"
+          echo "⚠️  Tunnel logs:"
+          cat pinggy.log
         fi
         
-        echo "══════════════════════════════════════════════════"
+        echo "======================================================"
         
-        # Keep the session alive and show URL when found
-        echo ""
-        echo "📝 Monitoring for URL (will update when found):"
-        
-        # Keep checking for URL if not found yet
-        while [ -z "$URL" ]; do
-          sleep 5
-          URL=$(grep -o 'https://[-a-zA-Z0-9.]*\.trycloudflare\.com' cf.log | head -n 1)
-          if [ ! -z "$URL" ]; then
-            echo ""
-            echo "✅ URL FOUND: $URL"
-            echo "✅ SSH Command: ssh -o ProxyCommand=\"cloudflared access ssh --hostname $URL\" root@localhost"
-          fi
-        done
-        
-        # Keep alive for 6 hours
-        while true; do 
+        # Keep alive
+        while true; do
           sleep 300
-          echo "⏱️  [$(date '+%H:%M:%S')] Session active - URL: $URL"
+          echo "[$(date '+%H:%M:%S')] Session active"
         done
