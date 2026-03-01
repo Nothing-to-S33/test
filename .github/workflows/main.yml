@@ -1,4 +1,4 @@
-name: BugHunter-Tunnelmole
+name: BugHunter-Netbird
 on: [push, workflow_dispatch]
 
 jobs:
@@ -13,34 +13,27 @@ jobs:
         sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
         sudo systemctl restart ssh
         
-    - name: Install Tunnelmole
+    - name: Install Netbird
       run: |
-        curl -O https://tunnelmole.com/downloads/tmole.js && chmod +x tmole.js
+        curl -sSL https://pkgs.netbird.io/install.sh | sh
         
-    - name: Start Tunnelmole
+    - name: Connect to Netbird
+      env:
+        NETBIRD_SETUP_KEY: ${{ secrets.NETBIRD_SETUP_KEY }}  # Get from https://app.netbird.io
       run: |
+        sudo netbird up --setup-key $NETBIRD_SETUP_KEY
+        IP=$(ip addr show wt0 | grep inet | awk '{print $2}' | cut -d/ -f1)
+        
         echo "======================================================"
-        echo "         🔥 BUG HUNTER SSH (Tunnelmole) 🔥"
+        echo "         🔥 BUG HUNTER SSH (Netbird) 🔥"
         echo "======================================================"
         echo ""
-        
-        # Start tunnel to SSH port
-        node tmole.js 22 > tmole.log 2>&1 &
-        
-        sleep 8
-        
-        # Get URL
-        URL=$(grep -o 'https://[a-zA-Z0-9.-]*\.tunnelmole\.net' tmole.log | head -1)
-        
-        if [ ! -z "$URL" ]; then
-          echo "✅ SSH Command:"
-          echo "ssh -p 22 root@$(echo $URL | cut -d/ -f3 | cut -d: -f1) -o StrictHostKeyChecking=no"
-          echo ""
-          echo "🔑 Password: toor123"
-        else
-          cat tmole.log
-        fi
-        
+        echo "📡 Runner Netbird IP: $IP"
+        echo ""
+        echo "💻 On your local machine (after installing Netbird):"
+        echo "ssh root@$IP"
+        echo ""
+        echo "🔑 Password: toor123"
         echo "======================================================"
         
         while true; do sleep 300; done
