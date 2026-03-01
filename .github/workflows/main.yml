@@ -1,4 +1,4 @@
-name: BugHunter-SSH
+name: BugHunter-Wush
 on: [push, workflow_dispatch]
 
 jobs:
@@ -7,74 +7,64 @@ jobs:
     timeout-minutes: 360
 
     steps:
-    - name: Install Cloudflared & Setup SSH
+    - name: Setup SSH with Custom Password
       run: |
-        sudo apt update
-        sudo apt install -y wget openssh-server
-        
-        # Download and install cloudflared correctly
-        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
-        sudo dpkg -i cloudflared-linux-amd64.deb
-        
-    - name: Configure SSH
-      run: |
-        # Set your password
         echo "root:toor123" | sudo chpasswd
-        
-        # Configure SSH for root login
         sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-        sudo sed -i 's/ChallengeResponseAuthentication no/ChallengeResponseAuthentication yes/' /etc/ssh/sshd_config
-        sudo systemctl restart sshd
+        sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+        sudo systemctl restart ssh
+        echo "✅ SSH configured with password: toor123"
         
-    - name: Start Cloudflare Tunnel
+    - name: Install Wush (Correct Link)
       run: |
-        # Clear any old logs
-        rm -f cf.log
+        # Download the correct file with underscore format
+        wget -O wush.tar.gz https://github.com/coder/wush/releases/download/v0.4.1/wush_0.4.1_linux_amd64.tar.gz
+        tar -xzf wush.tar.gz
+        chmod +x wush
+        sudo mv wush /usr/local/bin/
+        rm wush.tar.gz
+        echo "✅ Wush v0.4.1 installed successfully"
         
-        # Start tunnel in background
-        cloudflared tunnel --url ssh://localhost:22 > cf.log 2>&1 &
-        
+    - name: Start Wush Tunnel
+      run: |
         echo "======================================================"
-        echo "    🔥 BUG HUNTER SSH ACCESS (6 HOURS) 🔥"
+        echo "         🔥 BUG HUNTER SSH (WUSH) 🔥"
         echo "======================================================"
         echo ""
-        echo "⏳ Waiting for tunnel to establish (15 seconds)..."
         
-        # Wait for tunnel to establish
-        sleep 15
+        # Start wush in background
+        wush serve :22 > wush.log 2>&1 &
+        WUSH_PID=$!
         
-        # Extract and display the URL
-        URL=$(grep -o 'https://[a-zA-Z0-9.-]*\.trycloudflare\.com' cf.log | head -1)
+        echo "⏳ Generating authentication key..."
+        sleep 8
         
-        if [ ! -z "$URL" ]; then
-          echo "✅ TUNNEL READY!"
-          echo "══════════════════════════════════════════════════"
-          echo "📡 YOUR CONNECTION DETAILS:"
-          echo ""
-          echo "   SSH Command for Windows Terminal:"
-          echo "   ssh -o ProxyCommand=\"cloudflared access ssh --hostname $URL\" root@localhost"
-          echo ""
-          echo "   🔑 Password: toor123"
-          echo ""
-          echo "   🌐 Or if you prefer PuTTY:"
-          echo "   Hostname: $URL"
-          echo "   Port: 22"
-          echo "   Username: root"
-          echo "══════════════════════════════════════════════════"
-        else
-          echo "⚠️  URL not found, showing logs:"
-          cat cf.log
-        fi
+        # Get the auth key
+        echo "📡 WUSH AUTHENTICATION KEY:"
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        wush auth show
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         
         echo ""
-        echo "⏱️  Session will expire in 6 hours"
-        echo "📝 Keep this tab open - closing it stops the session"
+        echo "======================================================"
+        echo "🔑 SSH Password: toor123"
+        echo "======================================================"
         echo ""
+        echo "📝 INSTRUCTIONS FOR WINDOWS:"
+        echo "──────────────────────────────────────"
+        echo "1. On Windows, download: curl -LO https://github.com/coder/wush/releases/download/v0.4.1/wush_0.4.1_windows_amd64.exe"
+        echo "2. Rename to wush.exe"
+        echo "3. Run: .\wush.exe ssh"
+        echo "4. Paste the AUTHENTICATION KEY above"
+        echo "5. When prompted for password, enter: toor123"
+        echo "──────────────────────────────────────"
         
-        # Keep alive and show status every 5 minutes
+        # Show auth key every 5 minutes for easy copy
         COUNTER=0
         while true; do
           sleep 300
           COUNTER=$((COUNTER + 5))
-          echo "[$(date '+%H:%M:%S')] Session active for $COUNTER minutes - URL: ${URL:-check above}"
+          echo "[$(date '+%H:%M:%S')] Session active for $COUNTER minutes"
+          echo "🔑 Auth key still: $(wush auth show 2>/dev/null | head -1)"
         done
