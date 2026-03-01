@@ -1,4 +1,4 @@
-name: BugHunter-LocalhostRun
+name: BugHunter-Tunnelmole
 on: [push, workflow_dispatch]
 
 jobs:
@@ -13,31 +13,32 @@ jobs:
         sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
         sudo systemctl restart ssh
         
-    - name: Start localhost.run Tunnel
+    - name: Install Tunnelmole
+      run: |
+        curl -O https://tunnelmole.com/downloads/tmole.js && chmod +x tmole.js
+        
+    - name: Start Tunnelmole
       run: |
         echo "======================================================"
-        echo "         🔥 BUG HUNTER SSH (localhost.run) 🔥"
+        echo "         🔥 BUG HUNTER SSH (Tunnelmole) 🔥"
         echo "======================================================"
         echo ""
         
-        # Create SSH tunnel
-        ssh -o StrictHostKeyChecking=no -R 80:localhost:22 ssh.localhost.run > tunnel.log 2>&1 &
+        # Start tunnel to SSH port
+        node tmole.js 22 > tmole.log 2>&1 &
         
-        sleep 10
+        sleep 8
         
-        # Extract URL
-        URL=$(grep -o 'https://[a-zA-Z0-9.-]*\.lhr\.life' tunnel.log | head -1)
+        # Get URL
+        URL=$(grep -o 'https://[a-zA-Z0-9.-]*\.tunnelmole\.net' tmole.log | head -1)
         
         if [ ! -z "$URL" ]; then
-          echo "✅ Tunnel URL: $URL"
-          echo ""
-          echo "📡 SSH Command:"
-          echo "ssh -p 22 root@$(echo $URL | cut -d/ -f3) -o StrictHostKeyChecking=no"
+          echo "✅ SSH Command:"
+          echo "ssh -p 22 root@$(echo $URL | cut -d/ -f3 | cut -d: -f1) -o StrictHostKeyChecking=no"
           echo ""
           echo "🔑 Password: toor123"
         else
-          echo "⚠️  Tunnel logs:"
-          cat tunnel.log
+          cat tmole.log
         fi
         
         echo "======================================================"
