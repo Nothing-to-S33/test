@@ -7,52 +7,44 @@ jobs:
     timeout-minutes: 360
 
     steps:
-    - name: Become Root and Configure SSH with Direct Root Login
+    - name: Configure SSH for Direct Root Access
       run: |
-        # Ensure we're running as root from the start
-        sudo -i
-        
-        # Set root password
-        echo "root:toor123" | chpasswd
-        
-        # Configure SSH for direct root login
-        sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-        sed -i 's/#PermitRootLogin yes/PermitRootLogin yes/' /etc/ssh/sshd_config
-        sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-        sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
-        sed -i 's/#ChallengeResponseAuthentication yes/ChallengeResponseAuthentication yes/' /etc/ssh/sshd_config
-        sed -i 's/ChallengeResponseAuthentication no/ChallengeResponseAuthentication yes/' /etc/ssh/sshd_config
+        # Configure SSH for direct root login (no password needed)
+        sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+        sudo sed -i 's/#PermitRootLogin yes/PermitRootLogin yes/' /etc/ssh/sshd_config
+        sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+        sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
         
         # Restart SSH service
-        systemctl restart ssh
-        echo "✅ SSH configured with direct root login and password: toor123"
+        sudo systemctl restart ssh
+        echo "✅ SSH configured for root access"
         
     - name: Install Wush
       run: |
         wget -O wush.tar.gz https://github.com/coder/wush/releases/download/v0.4.1/wush_0.4.1_linux_amd64.tar.gz
         tar -xzf wush.tar.gz
         chmod +x wush
-        mv wush /usr/local/bin/
+        sudo mv wush /usr/local/bin/
         rm wush.tar.gz
         echo "✅ Wush v0.4.1 installed"
         
     - name: Install ZSH Shell (Root User)
       run: |
         echo "======================================================"
-        echo "         🔧 INSTALLING ZSH WITH OH MY POSH 🔧"
+        echo "         🔧 INSTALLING ZSH SHELL 🔧"
         echo "======================================================"
         
-        # Clone and run the installation script as root
+        # Clone and run the installation script
         git clone https://github.com/mugh33ra/install-ZSH-shell /tmp/zsh-install
         cd /tmp/zsh-install
-        bash install_shell.sh
+        sudo bash install_shell.sh
         
         # Set ZSH as default shell for root
-        chsh -s /usr/bin/zsh root
+        sudo chsh -s /usr/bin/zsh root
         
         # Clean up
         cd /
-        rm -rf /tmp/zsh-install
+        sudo rm -rf /tmp/zsh-install
         
         echo "✅ ZSH shell installed and set as default for root"
         
@@ -61,74 +53,34 @@ jobs:
         echo "======================================================"
         echo "         🔥 BUG HUNTER SSH (WUSH) 🔥"
         echo "======================================================"
-        echo ""
         
-        # Start wush and capture output to get auth key
-        echo "⏳ Starting wush server and generating auth key..."
-        echo ""
-        
-        # Run wush serve and capture output
+        # Start wush and capture output
         wush serve :22 2>&1 | tee /tmp/wush_output.log &
         WUSH_PID=$!
         
-        # Wait for auth key to appear
-        echo "⏳ Waiting for authentication key..."
         sleep 8
         
-        # Extract auth key from log
+        # Extract auth key
         AUTH_KEY=$(grep -o '[a-zA-Z0-9]\{50,\}' /tmp/wush_output.log 2>/dev/null | head -1)
         
+        echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
         if [ ! -z "$AUTH_KEY" ]; then
-          echo "🔑 YOUR AUTHENTICATION KEY:"
+          echo "🔑 AUTHENTICATION KEY:"
           echo "$AUTH_KEY"
         else
-          echo "📡 WUSH SERVER RUNNING - CHECK BELOW FOR AUTH KEY:"
+          echo "📡 WUSH OUTPUT - AUTH KEY BELOW:"
           tail -n 15 /tmp/wush_output.log
         fi
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        
         echo ""
         echo "======================================================"
-        echo "🔑 SSH Password: toor123"
-        echo "🐚 Default Shell: ZSH (with Oh My Posh)"
-        echo "======================================================"
-        echo ""
-        echo "📝 INSTRUCTIONS FOR CONNECTION:"
-        echo "──────────────────────────────────────────────────"
-        echo "1. Download wush for your OS:"
-        echo "   Linux/Mac:"
-        echo "     wget -O wush https://github.com/coder/wush/releases/download/v0.4.1/wush_\$(uname -s | tr '[:upper:]' '[:lower:]')_amd64.tar.gz"
-        echo ""
-        echo "   Windows:"
-        echo "     curl -LO https://github.com/coder/wush/releases/download/v0.4.1/wush_0.4.1_windows_amd64.exe"
-        echo "     ren wush_0.4.1_windows_amd64.exe wush.exe"
-        echo ""
-        echo "2. Connect using the auth key above:"
+        echo "🔗 CONNECTION COMMAND:"
         echo "   ./wush ssh"
-        echo ""
-        echo "3. When prompted for password, enter: toor123"
-        echo "   (You'll be automatically logged in as root with ZSH shell)"
-        echo "──────────────────────────────────────────────────"
-        echo ""
-        echo "📌 Once connected, you'll be at the root ZSH prompt:"
-        echo "   root@fv-azure:~#"
+        echo "======================================================"
         echo ""
         
-        # Monitor and display auth key
+        # Keep workflow alive
         while true; do
-          sleep 10
-          if [ -z "$AUTH_KEY" ]; then
-            NEW_KEY=$(grep -o '[a-zA-Z0-9]\{50,\}' /tmp/wush_output.log 2>/dev/null | head -1)
-            if [ ! -z "$NEW_KEY" ]; then
-              AUTH_KEY=$NEW_KEY
-              echo ""
-              echo "══════════════════════════════════════════════════"
-              echo "✅ AUTH KEY FOUND!"
-              echo "══════════════════════════════════════════════════"
-              echo "$AUTH_KEY"
-              echo "══════════════════════════════════════════════════"
-              echo ""
-            fi
-          fi
+          sleep 30
         done
